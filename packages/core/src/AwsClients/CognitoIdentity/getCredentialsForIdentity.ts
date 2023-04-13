@@ -1,6 +1,7 @@
 import type {
 	GetCredentialsForIdentityCommandInput,
 	GetCredentialsForIdentityCommandOutput,
+	Credentials,
 } from '@aws-sdk/client-cognito-identity';
 import {
 	buildHttpRpcRequest,
@@ -10,7 +11,13 @@ import {
 } from './base';
 import { composeServiceApi } from '../../clients/internal/composeApiHandler';
 import { Endpoint, HttpRequest, HttpResponse } from '../../clients/types';
-import { parseJsonBody, throwJsonError } from '../../clients/serde';
+import {
+	parseJsonBody,
+	throwJsonError,
+	expectString,
+	parseEpochTimestamp,
+	parseMetadata,
+} from '../../clients/serde';
 
 export type {
 	GetCredentialsForIdentityCommandInput,
@@ -34,14 +41,19 @@ const getCredentialsForIdentityDeserializer = async (
 	} else {
 		const body = await parseJsonBody(response);
 		return {
-			...body,
-			Credentials: {
-				...body.Credentials,
-				Expiration: new Date(body.Credentials.Expiration * 1000),
-			},
-		} as GetCredentialsForIdentityCommandOutput;
+			$metadata: parseMetadata(response),
+			Credentials: de_Credentials(body.Credentials),
+			IdentityId: expectString(body.IdentityId),
+		};
 	}
 };
+
+const de_Credentials = (output: unknown = {}): Credentials => ({
+	AccessKeyId: expectString(output['AccessKeyId']),
+	Expiration: parseEpochTimestamp(output['Expiration']),
+	SecretKey: expectString(output['SecretKey']),
+	SessionToken: expectString(output['SessionToken']),
+});
 
 export const getCredentialsForIdentity = composeServiceApi(
 	cognitoIdentityTransferHandler,
